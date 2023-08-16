@@ -1,0 +1,165 @@
+#Display all orders of Pavel Baranov (order id, what books, at what price and in what quantity he ordered) 
+sorted by order number and book titles
+
+SELECT buy_book.buy_id, title, price, buy_book.amount
+FROM client 
+INNER JOIN buy ON client.client_id = buy.client_id
+INNER JOIN buy_book ON buy.buy_id = buy_book.buy_id
+INNER JOIN book ON buy_book.book_id = book.book_id
+WHERE client.name_client = 'Баранов Павел' 
+ORDER BY buy_id, title
+
+
+Calculate how many times each book was ordered, display its author for the book
+(you need to calculate how many orders each book appears in). 
+Print the last name and initials of the author, the title of the book, name the last column Quantity. 
+The result is sorted first by the names of the authors, and then by the titles of the books.
+
+SELECT name_author, title, COUNT(buy_book.amount) AS Количество
+FROM author
+INNER JOIN book ON author.author_id = book.author_id
+LEFT JOIN buy_book ON book.book_id = buy_book.book_id
+GROUP BY title, name_author
+ORDER BY name_author, title
+
+Display the cities where customers who placed orders in the online store live. Specify the number of orders
+to each city, name this column Quantity. 
+Display information in descending order by the number of orders, and then in alphabetical order by city name.
+
+
+SELECT name_city, COUNT(buy.buy_id) AS Количество
+FROM client 
+INNER JOIN city ON client.city_id = city.city_id 
+INNER JOIN buy ON client.client_id = buy.client_id
+GROUP BY buy.client_id
+ORDER BY COUNT(buy.buy_id) DESC, name_city
+
+
+Display the numbers of all paid orders and the dates when they were paid.
+
+
+SELECT buy_id, date_step_end
+FROM step
+INNER JOIN buy_step ON step.step_id = buy_step.step_id
+WHERE buy_step.step_id = 1 AND date_step_end IS NOT Null
+
+
+
+Display information about each order: its number, who formed it (user's last name) 
+and its cost (the sum of the products of the number of ordered books and their prices), 
+sorted by order number. The last column is called Cost.
+
+SELECT buy_id, name_client, SUM(Цены) AS Стоимость
+FROM (SELECT buy_book.buy_id, name_client, SUM(buy_book.amount) * price AS Цены
+FROM client 
+INNER JOIN buy ON buy.client_id = client.client_id
+INNER JOIN buy_book ON buy.buy_id = buy_book.buy_id
+INNER JOIN book ON buy_book.book_id = book.book_id
+GROUP BY buy_id, price) zxc
+GROUP BY buy_id, name_client
+ORDER BY buy_id;
+
+
+Display the order numbers (buy_id) and the names of the stages they are currently on. 
+If the order has been delivered, do not display information about it.
+Sort the information in ascending order by buy_id.
+
+SELECT buy_id, name_step
+FROM step
+INNER JOIN buy_step ON buy_step.step_id = step.step_id
+WHERE date_step_end IS Null AND date_step_beg IS NOT Null
+ORDER BY buy_id
+
+
+
+In the city table for each city, the number of days for which the order can be delivered to this city is indicated (only the "Transportation" stage is considered). 
+For those orders that have passed the stage of transportation, display the number of days for which the order is actually delivered to the city. 
+And also, if the order is delivered late, specify the number of days of delay, otherwise, output 0. 
+Include the order number (buy_id) as well as the calculated columns Number_days and Lateness in the result. Display information sorted by order number.
+
+
+SELECT buy.buy_id, DATEDIFF(date_step_end, date_step_beg) AS Количество_дней, 
+IF (DATEDIFF(date_step_end, date_step_beg) - city.days_delivery > 0,DATEDIFF(date_step_end, date_step_beg) - city.days_delivery, 0) AS Опоздание
+FROM city 
+INNER JOIN client ON client.city_id = city.city_id
+INNER JOIN buy ON buy.client_id = client.client_id 
+INNER JOIN buy_step ON buy.buy_id = buy_step.buy_id
+INNER JOIN step ON step.step_id = buy_step.step_id
+WHERE date_step_beg IS NOT NULL AND date_step_end IS NOT NULL
+AND buy_step.step_id = 3 
+ORDER BY buy_id
+
+Select all clients who ordered Dostoevsky's books, display the information sorted alphabetically. 
+In the solution, use the author's last name, not his id.
+
+
+SELECT DISTINCT(name_client)
+FROM author
+INNER JOIN book ON author.author_id = book.author_id
+INNER JOIN buy_book ON book.book_id = buy_book.book_id
+INNER JOIN buy ON buy.buy_id = buy_book.buy_id
+INNER JOIN client ON buy.client_id = client.client_id
+WHERE author.name_author = 'Достоевский Ф.М.'
+ORDER BY name_client
+
+
+Output the genre (or genres) in which the most copies of books were ordered, indicate this number. 
+Name the last column Quantity.
+
+
+SELECT name_genre, SUM(bb.amount) AS Количество 
+FROM book 
+    JOIN genre USING (genre_id)
+    JOIN buy_book bb USING (book_id)
+GROUP BY name_genre
+HAVING Количество >= ALL 
+    (SELECT SUM(bb.amount) AS sum_amount
+     FROM book JOIN buy_book bb USING (book_id)
+     GROUP BY genre_id);
+
+
+
+Compare monthly book sales for the current year and the previous year. 
+To do this, display the year, month, amount of revenue sorted first in ascending months, then in ascending years.
+Column names: Year, Month, Amount.
+
+
+SELECT Год, Месяц, SUM(Выручка) AS Сумма 
+FROM
+(SELECT YEAR(date_payment) AS Год, MONTHNAME(date_payment) 
+AS Месяц, price * SUM(amount) AS Выручка
+FROM buy_archive
+GROUP BY MONTHNAME(date_payment), YEAR(date_payment), price
+UNION ALL
+SELECT YEAR(date_step_beg) AS Год, MONTHNAME(date_step_beg) AS Месяц,
+price * SUM(buy_book.amount) AS Выручка
+FROM buy_step
+INNER JOIN buy_book ON buy_step.buy_id = buy_book.buy_id
+INNER JOIN book ON buy_book.book_id = book.book_id
+WHERE  buy_step.step_id = 1 AND buy_step.date_step_end IS NOT NULL
+GROUP BY MONTHNAME(date_step_beg), YEAR(date_step_beg),
+price
+ORDER BY Месяц, Год) zxc
+GROUP BY Месяц, Год
+
+
+For each individual book, it is necessary to display information on the number of copies 
+sold and their cost for 2020 and 2019. Name the calculated columns Quantity and Amount. 
+Sort information in descending order.
+
+
+SELECT title, SUM(Количество) AS Количество, SUM(Сумма) AS Сумма
+FROM 
+(SELECT title, SUM(buy_archive.amount) AS Количество,SUM(buy_archive.amount) * buy_archive.price AS Сумма
+FROM buy_archive
+INNER JOIN book USING(book_id)
+GROUP BY title, buy_archive.price
+UNION ALL
+SELECT title, SUM(buy_book.amount) AS Количество,SUM(buy_book.amount) * price AS Сумма
+FROM book
+INNER JOIN buy_book USING(book_id)
+INNER JOIN buy_step USING(buy_id)
+WHERE  buy_step.step_id = 1 AND buy_step.date_step_end IS NOT NULL
+GROUP BY title, price) zxc
+GROUP BY title
+ORDER BY Сумма DESC
